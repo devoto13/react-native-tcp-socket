@@ -46,5 +46,8 @@ export type TLSSocketOptions = {
     certAlias?: string | undefined;
     keyAlias?: string | undefined;
     resolvedKeys?: string[] | undefined;
+    pskIdentity?: string;
+    pskKey?: string;
+    pskCipherSuites?: number[];
 };
 import Socket from "./Socket";

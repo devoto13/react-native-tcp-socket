@@ -2,9 +2,13 @@ package com.asterinet.react.tcpsocket;
 
 import android.content.Context;
 import android.net.Network;
+import android.util.Base64;
 
 import com.facebook.react.bridge.ReadableMap;
 import com.facebook.react.bridge.ReadableArray;
+
+import org.bouncycastle.tls.BasicTlsPSKIdentity;
+import org.bouncycastle.tls.TlsPSKIdentity;
 
 import java.io.BufferedInputStream;
 import java.io.IOException;
@@ -44,7 +48,6 @@ class TcpSocketClient extends TcpSocket {
         if (tlsOptions != null) {
             SSLSocketFactory ssf = getSSLSocketFactory(context, tlsOptions);
             socket = ssf.createSocket();
-            ((SSLSocket) socket).setUseClientMode(true);
         } else {
             socket = new Socket();
         }
@@ -66,17 +69,20 @@ class TcpSocketClient extends TcpSocket {
         // bind
         socket.bind(new InetSocketAddress(localInetAddress, localPort));
         socket.connect(new InetSocketAddress(remoteInetAddress, port));
+        if (socket instanceof SSLSocket) ((SSLSocket) socket).setUseClientMode(true);
         if (socket instanceof SSLSocket) ((SSLSocket) socket).startHandshake();
+        if (socket instanceof PskSocket) ((PskSocket) socket).startHandshake();
         startListening();
     }
 
     public void startTLS(Context context, ReadableMap tlsOptions) throws IOException, GeneralSecurityException {
-        if (socket instanceof SSLSocket) return;
+        if (socket instanceof SSLSocket || socket instanceof PskSocket) return;
         SSLSocketFactory ssf = getSSLSocketFactory(context, tlsOptions);
-        SSLSocket sslSocket = (SSLSocket) ssf.createSocket(socket, socket.getInetAddress().getHostAddress(), socket.getPort(), true);
-        sslSocket.setUseClientMode(true);
-        sslSocket.startHandshake();
-        socket = sslSocket;
+        Socket wrappedSocket = ssf.createSocket(socket, socket.getInetAddress().getHostAddress(), socket.getPort(), true);
+        if (wrappedSocket instanceof SSLSocket) ((SSLSocket) wrappedSocket).setUseClientMode(true);
+        if (wrappedSocket instanceof SSLSocket) ((SSLSocket) wrappedSocket).startHandshake();
+        if (wrappedSocket instanceof PskSocket) ((PskSocket) wrappedSocket).startHandshake();
+        socket = wrappedSocket;
     }
 
     private boolean containsKey(ReadableArray array, String key) {
@@ -87,6 +93,7 @@ class TcpSocketClient extends TcpSocket {
         }
         return false;
     }
+
     private ResolvableOption getResolvableOption(ReadableMap tlsOptions, String key) {
         if (tlsOptions.hasKey(key)) {
             String value = tlsOptions.getString(key);
@@ -108,9 +115,15 @@ class TcpSocketClient extends TcpSocket {
         final String keyAlias = tlsOptions.hasKey("keyAlias") ? tlsOptions.getString("keyAlias") : "";
         final String certAlias = tlsOptions.hasKey("certAlias") ? tlsOptions.getString("certAlias") : "";
         final KeystoreInfo keystoreInfo = new KeystoreInfo(keystoreName, caAlias, certAlias, keyAlias);
+        final String pskIdentity = tlsOptions.hasKey("pskIdentity") ? tlsOptions.getString("pskIdentity") : "";
+        final byte[] pskKey = tlsOptions.hasKey("pskKey") ? Base64.decode(tlsOptions.getString("pskKey"), Base64.DEFAULT) : new byte[0];
+        final int[] pskCipherSuites = tlsOptions.hasKey("pskCipherSuites") ? tlsOptions.getArray("pskCipherSuites").toArrayList().stream().mapToInt(i -> ((Double) i).intValue()).toArray() : new int[0];
 
-        if (tlsOptions.hasKey("rejectUnauthorized") && !tlsOptions.getBoolean("rejectUnauthorized")) {
-            if (customTlsKey != null && customTlsCert != null ) {
+        if (tlsOptions.hasKey("pskIdentity") && tlsOptions.hasKey("pskKey")) {
+            TlsPSKIdentity identity = new BasicTlsPSKIdentity(pskIdentity, pskKey);
+            ssf = new PskSSLSocketFactory(pskCipherSuites, identity);
+        } else if (tlsOptions.hasKey("rejectUnauthorized") && !tlsOptions.getBoolean("rejectUnauthorized")) {
+            if (customTlsKey != null && customTlsCert != null) {
                 ssf = SSLCertificateHelper.createCustomTrustedSocketFactory(
                         context,
                         customTlsCa,

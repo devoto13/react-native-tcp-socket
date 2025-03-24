@@ -13,6 +13,9 @@ import Socket from './Socket';
  * @property {string} [certAlias]
  * @property {string} [keyAlias]
  * @property {string[]} [resolvedKeys]
+ * @property {string} [pskIdentity]
+ * @property {string} [pskKey]
+ * @property {number[]} [pskCipherSuites]
  *
  * @extends {Socket}
  */
