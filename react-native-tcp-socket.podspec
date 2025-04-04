@@ -12,10 +12,17 @@ Pod::Spec.new do |s|
   s.platforms    = { :ios => "9.0", :tvos => "10.0", :osx => "10.14" }
   s.source       = { :git => "https://github.com/Rapsssito/react-native-tcp-socket.git", :tag => "#v{s.version}" }
 
-  s.source_files = "ios/**.{h,m,swift}"
+  s.source_files = "ios/**/*.{h,m,mm,swift}"
   s.requires_arc = true
 
   s.dependency "React-Core"
-  s.dependency "CocoaAsyncSocket"
+
+  s.swift_version = "5.8"
+
+  spm_dependency(s,
+	  url: 'https://github.com/apple/swift-nio-ssl.git',
+	  requirement: {kind: 'upToNextMajorVersion', minimumVersion: '2.29.3'},
+	  products: ['NIOSSL']
+  )
 
 end
